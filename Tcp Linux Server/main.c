@@ -1,4 +1,5 @@
 #include "common.h"
+#include <asm-generic/errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -138,7 +139,7 @@ void do_server(int sfd, char cities[], sigset_t *old_mask)
                 }
 
                 char msg[CLIENT_BUFFER_SIZE];
-                ssize_t n = read(fd, &msg, CLIENT_BUFFER_SIZE - scouts[client_index].buffer_size);
+                ssize_t n = read(fd, msg, CLIENT_BUFFER_SIZE - scouts[client_index].buffer_size);
                 if (n < 0) ERR("read");
                 if (n == 0) 
                 {
@@ -146,14 +147,14 @@ void do_server(int sfd, char cities[], sigset_t *old_mask)
                     continue;
                 }
 
-                strncpy(scouts[client_index].buffer + scouts[client_index].buffer_size, msg, n);
+                memcpy(scouts[client_index].buffer + scouts[client_index].buffer_size, msg, n);
                 scouts[client_index].buffer_size += n;
                 int written_bytes_num = 0;
 
                 while(scouts[client_index].buffer_size >= SINGLE_MES_SIZE) //parsing client's messages loop
                 {
                     char temp[SINGLE_MES_SIZE + 1];
-                    strncpy(temp, scouts[client_index].buffer + written_bytes_num, SINGLE_MES_SIZE);
+                    memcpy(temp, scouts[client_index].buffer + written_bytes_num, SINGLE_MES_SIZE);
                     temp[SINGLE_MES_SIZE] = '\0';
                     printf("%d: %s\n", scouts[client_index].fd, temp);
                     written_bytes_num += SINGLE_MES_SIZE;
@@ -172,14 +173,20 @@ void do_server(int sfd, char cities[], sigset_t *old_mask)
                         {
                             if(scouts[j].connected == 1 && scouts[j].fd != scouts[client_index].fd)
                             {
-                                if(write(scouts[j].fd, temp, sizeof(temp)) < 0)
+                                if(write(scouts[j].fd, temp, SINGLE_MES_SIZE) < 0)
                                 {
                                     if (errno == EPIPE)
                                     {
-                                        close_client(scouts, client_index, &scout_number);
-                                        break;
+                                        close_client(scouts, j, &scout_number);
                                     }
-                                    ERR("write"); //to correct
+                                    else if(errno == EAGAIN || errno == EWOULDBLOCK)
+                                    {
+                                        fprintf(stderr, "Warning: Buffer full for client %d, dropping message.\n", scouts[j].fd);
+                                    }
+                                    else
+                                    {
+                                        ERR("write"); 
+                                    }
                                 }    
                             }       
                         }
