@@ -1,4 +1,5 @@
 #include "common.h"
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/epoll.h>
@@ -7,6 +8,11 @@
 #define MAX_EVENTS 4
 #define CLIENT_BUFFER_SIZE 16
 #define SINGLE_MES_SIZE 4
+#define CITIES_NUM 20
+#define GREEK 'g'
+#define PERSIAN 'p'
+
+volatile sig_atomic_t do_work = 1;
 
 typedef struct {
     int connected;
@@ -15,7 +21,44 @@ typedef struct {
     int buffer_size;
 } scout;
 
-void do_server(int sfd)
+void SIGINT_handler()
+{
+    do_work = 0;
+}
+
+int parse_message(char message[], char cities[])
+{
+    char owner = message[0];
+    if(owner != GREEK && owner != PERSIAN)
+        return -1;
+    char d1 = message[1]; char d2 = message[2];
+    if(d1 != '0' && d1 != '1' && d2 != '2')
+        return -2;
+    if(d2 < '0' || d2 > '9')
+        return -3;
+    int city = (d1 - '0') * 10 + (d2 - '0'); 
+    if(city > 20 || city < 1)
+        return -4;
+    if(message[3] != '\n')
+        return -5;
+
+    if(cities[city - 1] == owner) return 0;
+    
+    cities[city - 1] = owner;
+    return 1;
+}
+
+void close_client(scout scouts[], int client_index, int* scout_number)
+{
+    printf("client disconnected\n");
+    close(scouts[client_index].fd);
+    scouts[client_index].connected = 0;
+    scouts[client_index].buffer_size = 0;
+    scouts[client_index].fd = -1;
+    (*scout_number)--;
+}
+
+void do_server(int sfd, char cities[], sigset_t *old_mask)
 {
     int scout_number = 0;
     scout scouts[MAX_EVENTS];
@@ -36,9 +79,9 @@ void do_server(int sfd)
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sfd, &ev))
         ERR("epoll_ctl");
 
-    while(1)
+    while(do_work)
     {
-        int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+        int nfds = epoll_pwait(epoll_fd, events, MAX_EVENTS, -1, old_mask);
         if (nfds < 0) 
         {
             if (errno != EINTR)
@@ -47,7 +90,7 @@ void do_server(int sfd)
         for(int i = 0; i < nfds; i++)
         {
             int fd = events[i].data.fd;
-            if(fd == sfd)
+            if(fd == sfd) //new client
             {
                 if(scout_number == 4) 
                 {
@@ -77,9 +120,9 @@ void do_server(int sfd)
                 int flags = fcntl(client_fd, F_GETFL, 0) | O_NONBLOCK;
                 fcntl(client_fd, F_SETFL, flags);
             }
-            else 
+            else //new message from client
             {
-                int client_index = -1;
+                int client_index = -1; 
                 for(int j = 0; j < MAX_EVENTS; j++)
                 {
                     if(scouts[j].connected == 1 && scouts[j].fd == fd)
@@ -99,18 +142,15 @@ void do_server(int sfd)
                 if (n < 0) ERR("read");
                 if (n == 0) 
                 {
-                    printf("client disconnected\n");
-                    close(fd);
-                    scouts[client_index].connected = 0;
-                    scouts[client_index].buffer_size = 0;
-                    scouts[client_index].fd = -1;
-                    scout_number--;
+                    close_client(scouts, client_index, &scout_number);
                     continue;
                 }
+
                 strncpy(scouts[client_index].buffer + scouts[client_index].buffer_size, msg, n);
                 scouts[client_index].buffer_size += n;
                 int written_bytes_num = 0;
-                while(scouts[client_index].buffer_size >= SINGLE_MES_SIZE)
+
+                while(scouts[client_index].buffer_size >= SINGLE_MES_SIZE) //parsing client's messages loop
                 {
                     char temp[SINGLE_MES_SIZE + 1];
                     strncpy(temp, scouts[client_index].buffer + written_bytes_num, SINGLE_MES_SIZE);
@@ -118,24 +158,68 @@ void do_server(int sfd)
                     printf("%d: %s\n", scouts[client_index].fd, temp);
                     written_bytes_num += SINGLE_MES_SIZE;
                     scouts[client_index].buffer_size -= SINGLE_MES_SIZE;
+                    int result = parse_message(temp, cities);
+                    if(result < 0)
+                    {
+                        close_client(scouts, client_index, &scout_number);
+                        break;
+                    }
+                    //printf("%d\n", result);
+                    if(result == 1)
+                    {
+                        printf("A city changed its owner\n");
+                        for(int j = 0; j < MAX_EVENTS; j++)
+                        {
+                            if(scouts[j].connected == 1 && scouts[j].fd != scouts[client_index].fd)
+                            {
+                                if(write(scouts[j].fd, temp, sizeof(temp)) < 0)
+                                {
+                                    if (errno == EPIPE)
+                                    {
+                                        close_client(scouts, client_index, &scout_number);
+                                        break;
+                                    }
+                                    ERR("write"); //to correct
+                                }    
+                            }       
+                        }
+                    }
                 }
                 memmove(scouts[client_index].buffer, scouts[client_index].buffer + written_bytes_num, scouts[client_index].buffer_size);
             }
         }
     }
-
+    for(int i = 0; i < MAX_EVENTS; i++)
+    {
+        if(scouts[i].connected == 1)
+            close_client(scouts, i, &scout_number);
+    }
 }
 
 int main(int argc, char **argv)
 {
     if(argc!=2)
         ERR("Invalid argument number");
+
+    sigset_t mask, oldmask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigprocmask(SIG_BLOCK, &mask, &oldmask);
+
+    sethandler(SIGINT_handler, SIGINT);
+
     int port = atoi(argv[1]);                                      
     int tcp_listen_socket = bind_tcp_socket(port, BACKLOG);
 
-    do_server(tcp_listen_socket);
+    char cities[CITIES_NUM];
+    for(int i = 0; i < CITIES_NUM; i++)
+        cities[i] = GREEK; 
+
+    do_server(tcp_listen_socket, cities, &oldmask);
 
     if (TEMP_FAILURE_RETRY(close(tcp_listen_socket)) < 0)
         ERR("close");
 
+    for(int i = 0; i < CITIES_NUM; i++)
+        printf("%d : %c\n", i + 1, cities[i]);
 }
