@@ -1,7 +1,9 @@
-Treść#
-W tym zadaniu należy napisać program służący do skanowania katalogu. Argumentami programu jest lista katalogów do przeskanowanie. Wyjściem programu jest lista wszystkich plików z ich rozmiarami (w bajtach) znajdująca się w podanych katalogach.
+Description#
+In this task, you will write a program that helps you scan a directory by scanning the files in it. Your program should receive a list of directories as its arguments and those directories will be scanned. As a result we want to get the list of all the files with its size which are in scanned directories.
 
-Przykładowe wywołanie:#
+Flag -p is used to provide each directory path. Flag -d means depth of scanning as the scanning process is limited to some depth of subdirectory search. Depth equal to 1 will only scan the current directory, depth equal 2 will scan the current directory and its immediate children and so on. During the scanning you should skip symlinks. Flag -e is optional and when provided, the program should skip during scanning all the files with the extension other than given with this flag. If the -o option is provided and the environment variable L1_OUTPUTFILE exists and is not empty, your program should output the information about scanned files to the file named in this environment variable; otherwise, your program should output this information to the standard output. If the file already exists it should be overwritten.
+
+Example:#
 $ ./prog -p ./dir1 -p ./dir2 -d 2 -e txt -o
 path: ./dir1
 file1.txt 15
@@ -11,12 +13,9 @@ file3.txt 23
 path: ./dir2/dir3
 file4.txt 44
 file5.txt 12342
-Etapy#
-Program wspiera flagę -p <path> służącą do podawania ścieżek katalogów. Może ona wystąpić kilka razy.
-
-Program wspiera dodatkowo flagę -e <extension> służącą do filtrowania wyjścia - tylko pliki z rozszerzeniem podanym po tej fladze z folderu poprzedzającego flagę powinny być wypisywane.
-
-Program wspiera dodatkowo flagę -d <depth> oznaczającą głębokość przeszukiwania - głębokość równa 1 oznacza skanowanie tylko samego katalogu, bez wchodzenia do podkatalogów.
-
-Program wspiera dodatkowo flagę -o. Gdy zostanie podana wyjście programu zostaje zapisane do pliku zapisanego w zmiennej środowiskowej L1_OUTPUTFILE (jeśli taka zmienna istnieje). Jeśli plik o tej nazwie już istnieje powinien zostać nadpisany.
+Stages#
+The program lists the names of the files of each provided directory on stdout, not skipping anything yet and ignoring other arguments. Run with -d 1 flag
+Program lists files with their sizes and option -e works
+Option -d works
+Option -o works
 

@@ -1,74 +1,63 @@
-Οἱ ἄγγελοι (Posłańcy)#
-Jest rok 480 p.n.e.
-Perski król Kserkses (staroperski: 𐎧𐏁𐎹𐎠𐎾𐏁𐎠, Khshayārsha) właśnie najechał greckie państwa-miasta.
-To niefortunne wydarzenie spowodowało, że wielu posłańców podróżujących po Grecji, zaczyna działać w charakterze zwiadowców.
-Odwiedzają oni różnorakie miasta. Niektóre osady kontrolowane są przez Greków, inne zostały przechwycone przez Persów.
+Οἱ ἄγγελοι (The messengers)#
+The year is 480 B.C.
+The Persian king Xerxes (Old Persian: 𐎧𐏁𐎹𐎠𐎾𐏁𐎠, Khshayārsha) has just invaded the Greek city-states.
+This unfortunate event has caused many messengers traveling throughout Greece to begin acting as scouts.
+They visit a variety of cities. Some settlements are controlled by the Greeks, while others have been taken by the Persians.
 
-Aby uzyskać przewagę informacyjną, obywatele Sparty (grecki dorycki: Σπάρτα) decydują się na otwarcie biblioteki połączonej z najnowszą siecią telekomunikacyjną posłańców.
+To gain an informational advantage, the citizens of Sparta (Doric Greek: Σπάρτα) decide to establish a library connected to the latest telecommunications network for messengers.
 
-Każdy z posłańców otrzymuje aplikację klienta TCP, która może łączyć się z serwerem biblioteki.
-Biblioteka zawiera listę państw-miast oraz informacje, czy są one kontrolowane przez Greków, czy przez Persów.
-Podobną listę utrzymuje też każdy z posłańców, aktualizując ją, gdy otrzyma nowe informacje z centralnej biblioteki.
-Jest 20 państw-miast. Każde z nich jest oznaczone liczbą ze zbioru [1, 20].
-Twoim zadaniem jest napisanie serwera biblioteki kompatybilnego z klientem.
+Each messenger receives a TCP client application that can connect to the library server.
+The library contains a list of city-states and information about whether they are controlled by the Greeks or the Persians.
+Each messenger maintains a similar list locally, updating it when new information is received from the central library.
+There are 20 city-states. Each one is identified by a number in the range [1, 20].
+Your task is to implement a library server compatible with the provided client.
 
-Program klienta dostarczony jest w postaci pliku wykonywalnego. Można go uruchomić przez:
+The client program is delivered as a compiled executable. You can run it using:
 
-./client <ADRES SERWERA> <NUMER PORTU>
-Dostarczony jest też plik wykonywalny przykładowej implementacji serwera.
+./client <SERVER_ADDRESS> <PORT_NUMBER>
+A compiled executable of a sample server implementation is also provided.
 
-Etapy:
-1. Zaimplementuj przyłączanie pojedynczego klienta do serwera TCP.
-
-Serwer akceptuje jako argument wejściowy numer portu.
-
-Przykładowe wykonanie serwera:
+Stages#
+1. Implement handling of a single client connecting to a TCP server.
+The server accepts the port number as a command-line argument.
+Example server execution:
 
 ./server 8888
-Po uruchomieniu serwer nasłuchuje na przyłączających klientów.
+After starting, the server listens for incoming client connections.
+Once connected to the first client, it waits to receive 4 bytes of data, prints them to stdout, closes the connection, and then exits.
 
-Gdy ustanowione zostanie połączenie z pierwszym klientem, serwer czeka na odbiór 4 bajtów, wypisuje je na stdout, zamyka połączenie, a następnie się kończy.
+2. Implement handling of multiple clients and receiving data.
+When a new client connects, they are added to the current list of clients.
+The maximum number of clients is 4.
+If the maximum number of clients is reached, new connections should be rejected.
+Whenever the server receives a 4-byte message from any client, it prints it to the terminal. Use the epoll function to implement this step
+(alternatively, you may use pselect or ppoll).
+⚠️ Note: In this step, you do not need to correctly handle client disconnections.
 
-
-2. Zaimplementuj obsługę wielu klientów i odbieranie danych.
-
-Po przyłączeniu się nowego klienta, zostaje on dodany do listy aktualnych klientów.
-Maksymalna liczba klientów to 4.
-Jeśli przyłączy się maksymalna liczba klientów, należy odrzucać nowe połączenia.
-Kiedy serwer otrzyma dane o długości 4 bajtów od któregokolwiek klienta, wyświetla je w terminalu.
-Do implementacji tego etapu użyj funkcji epoll
-(alternatywnie można użyć pselect lub ppoll).
-
-Uwaga: w tym etapie nie trzeba poprawnie obsługiwać rozłączania klientów.
-
-
-3.Dodaj do serwera tablicę zawierającą informacje, które miasto należy do której ze stron konfliktu.
-
-Na samym początku wszystkie miasta należą do Greków.
-Za każdym razem, gdy serwer otrzyma wiadomość postaci:
+3. Add to the server an array that stores information about which side each city belongs to.
+Initially, all cities belong to the Greeks.
+Each time the server receives a message in the format:
 pXX\n
-lub
+or
 gXX\n
-gdzie XX jest dwucyfrową liczbą oznaczającą numer miasta, oznacza to, że miasto XX należy do odpowiednio Persów lub Greków.
+where XX is a two-digit number representing a city identifier, it indicates that city XX now belongs to the Persians or the Greeks, respectively.
+If a city’s ownership hasn’t changed, take no action.
+If the city’s owner has changed:
+update the city ownership array,
+broadcast the received message to all other connected clients.
+Assumptions:
 
-Jeśli właściciel miasta się nie zmienił, nie należy podejmować żadnych akcji.
-Jeśli właściciel miasta się zmienił, należy:
-zaktualizować tablicę miast,
-a wiadomość otrzymaną od klienta rozesłać do wszystkich innych połączonych klientów.
+You still do not need to handle client disconnections at this stage.
+All incoming messages can be assumed to be in the correct format.
 
-Założenia:
-W tym etapie nadal nie trzeba poprawnie obsługiwać rozłączania klientów.
-Można też założyć, że przychodzące wiadomości są w poprawnym formacie.
+4.Upon receiving a SIGINT signal, the server should:
+close all connections,
+print out which side each city belongs to,
+free resources and terminate.
+Add proper handling for client disconnections in the following cases:
 
-
-4. Po otrzymaniu sygnału SIGINT, serwer:
-zamyka wszystkie połączenia,
-wypisuje na ekran do kogo należy każde z miast,
-zwalnia zasoby i kończy pracę.
-
-Dodaj poprawną obsługę rozłączania klientów w następujących przypadkach:
-Czytanie z deskryptora danego klienta zwraca wiadomość długości 0.
-Pisanie do deskryptora danego klienta zgłasza błąd EPIPE.
-Wiadomość otrzymana od klienta nie jest w odpowiednim formacie lub numer miasta nie jest w zakresie [1, 20].
-Serwer otrzymał C-c.
-Uwaga: Klienci rozłączający się zwalniają miejsce dla kolejnych, nowych klientów.
+Reading from a client descriptor returns a message of length 0.
+Writing to a client descriptor raises an EPIPE error.
+The message received from the client is not in the correct format or the city number is outside the [1, 20] range.
+The server receives a Control-C (C-c).
+⚠️ Note: Disconnected clients free up space for new incoming clients.
